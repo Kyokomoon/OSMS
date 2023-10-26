@@ -30,7 +30,7 @@ MAPL_UL = P_Tx_UE_dBm - FeederLoss + AntGain_BS_dBi + MIMOGain - reserve_on_inte
 MAPL_DL = P_Tx_BS_dBm - FeederLoss + AntGain_BS_dBi + MIMOGain - reserve_on_interferenceLoss - reserve_on_penetrationLoss - Rx_Sense_AT
 
 # Расстояния между приемником и передатчиком (от 1 до 1000 метров)
-distances_m = list(range(1, 6001))
+distances_m = list(range(1, 15001))
 
 #Модель UMiNLOS
 PL_UMiNLOS = []
@@ -46,8 +46,8 @@ for i in range(len(distances_m)):
     PL_UMiNLOS.append( 26 * math.log10(F_range) + 22.7 + 36.7 * math.log10(distances_m[i]))
 #Выбор местности 
 #CLATTER = 'DU'  #плотная городская застройка
-CLATTER = 'U'   #город
-#CLATTER = 'SU'   #пригород
+#CLATTER = 'U'   #город
+CLATTER = 'SU'   #пригород
 #CLATTER = 'RURAL'   #сельская местность
 #CLATTER = 'ROAD'    #трасса
 PL_COST231 = []
@@ -82,34 +82,69 @@ for i in range(len(distances_m)):
 PL_Walfish = []
 for i in range(len(distances_m)):
     PL_Walfish.append(42.6 + 20* math.log10(f) + 26 * math.log10(distances_m[i]/1000))
+#walfish nlos
+h = 30
+fi = 58
+hBuild = 30
+PL_Walfish_Nloss = []
+
+for i in range(1,len(distances_m)+1):    
+    path_long=i
+    L0=32.44+20*math.log10(1.9)+20*math.log10(i)    
+    if ((fi <35)&(fi>0)):
+        qoef=-10+0.354*fi    
+    elif ((fi <55)&(fi>=35)):
+        qoef=2.5 + 0.075 * fi    
+    elif ((fi <90) & (fi>=55)):
+        qoef=4.0 - 0.114 * fi
+    L2=-16.9-10 * math.log10(20)+10*math.log10(1.9)+20*math.log10(hBuild-3)+qoef    
+    if (hBS > hBuild):
+        L1_1=-18 * math.log10(1+hBS-hBuild)        
+        kD=18
+    elif (hBS <= hBuild):        
+        L1_1=0
+        kD=18-15*((hBS-hBuild)/hBuild)    
+    if ((hBS <= hBuild) & (path_long>500)):
+        kA=54-0.8*(hBS-hBuild)
+    elif ((hBS <= hBuild) & (path_long<=500)):        
+        kA=54-0.8*(hBS-hBuild) * path_long/0.5
+    elif (hBS>hBuild):        
+        kA=54
+        kF=-4+0.7*(1.9/925 - 1)    
+        L1=L1_1+kA+kD*math.log10(path_long)+kF*math.log10(1.9)-9*math.log10(20)
+    if(L1+L2>0):        
+        Llnos=L0+L1+L2
+    elif(L1+L2<=0):        
+        Llnos=L0
+    PL_Walfish_Nloss.append(Llnos)
 MAPL_DL_G = [MAPL_DL] * len(distances_m)
 MAPL_UL_G = [MAPL_UL] * len(distances_m)
 
 
-UM_Cross_in_UL = 0
-COST_Cross_in_UL = 0
-Wall_Cross_in_UL = 0
+UM_Cross_in_UL = -1
+COST_Cross_in_UL = -1
+Wall_Cross_in_UL = -1
 for i in range(1,len(PL_UMiNLOS)-1):
-    if PL_UMiNLOS[i-1] < MAPL_UL and PL_UMiNLOS[i+1] > MAPL_UL:
+    if PL_UMiNLOS[i-1] < MAPL_UL and PL_UMiNLOS[i+1] >= MAPL_UL:
         UM_Cross_in_UL = i
         
-    if PL_COST231[i-1] < MAPL_UL and PL_COST231[i+1] > MAPL_UL:
+    if PL_COST231[i-1] < MAPL_UL and PL_COST231[i+1] >= MAPL_UL:
         COST_Cross_in_UL = i
         
-    if PL_Walfish[i-1] < MAPL_UL and PL_Walfish[i+1] > MAPL_UL:
+    if PL_Walfish[i-1] < MAPL_UL and PL_Walfish[i+1] >= MAPL_UL:
        Wall_Cross_in_UL = i
         
-UM_Cross_in_DL = 0
-COST_Cross_in_DL = 0
-Wall_Cross_in_DL = 0
+UM_Cross_in_DL = -1
+COST_Cross_in_DL = -1
+Wall_Cross_in_DL = -1
 for i in range(1,len(PL_UMiNLOS)-1):
-    if PL_UMiNLOS[i-1] < MAPL_DL and PL_UMiNLOS[i+1] > MAPL_DL:
+    if PL_UMiNLOS[i-1] < MAPL_DL and PL_UMiNLOS[i+1] >= MAPL_DL:
         UM_Cross_in_DL = i
         
-    if PL_COST231[i-1] < MAPL_DL and PL_COST231[i+1] > MAPL_DL:
+    if PL_COST231[i-1] < MAPL_DL and PL_COST231[i+1] >= MAPL_DL:
         COST_Cross_in_DL = i
         
-    if PL_Walfish[i-1] < MAPL_DL and PL_Walfish[i+1] > MAPL_DL:
+    if PL_Walfish[i-1] < MAPL_DL and PL_Walfish[i+1] >= MAPL_DL:
        Wall_Cross_in_DL = i
 
 
@@ -148,6 +183,7 @@ plt.plot(distances_m, PL_COST231, label='COST231: ' + CLATTER, linestyle='-', co
 plt.plot(distances_m, PL_Walfish, label='Walfish', linestyle='-',color = 'y')
 plt.plot(distances_m, MAPL_DL_G, label='MAPL_DL',linestyle='dashed', color='b')
 plt.plot(distances_m, MAPL_UL_G, label='MAPL_UL',linestyle='dashed', color='black')
+plt.plot(distances_m,PL_Walfish_Nloss, label='Wallfish:Nloss',linestyle='dashed', color='m')
 plt.stem(distances_m, UM_Cross)
 plt.stem(distances_m, COST_Cross)
 plt.stem(distances_m, Wall_Cross)
@@ -167,5 +203,3 @@ print("Площадь базовой станции UMiNLOS", S_sot_UM, 'km2')
 print("Площадь базовой станции COST231", S_sot_COST, 'km2')
 print("Количество базовых станций для  UMiNLOS: ",Count_sot_UM)
 print("Количество базовых станций для COST231: ",Count_sot_COST)
-
-
